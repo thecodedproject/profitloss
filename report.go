@@ -22,27 +22,31 @@ const (
 type CompletedOrder struct {
 	Price decimal.Decimal
 	Volume decimal.Decimal
+	BaseFee decimal.Decimal
+	CounterFee decimal.Decimal
 	Type OrderType
 }
 
 type Report struct {
-	Type CalcType
+	Type CalcType `json:"type"`
 
-	RealisedGain decimal.Decimal
+	RealisedGain decimal.Decimal `json:"realised_gain"`
 
-	AverageBuyPrice decimal.Decimal
-	AverageSellPrice decimal.Decimal
+	AverageBuyPrice decimal.Decimal `json:"average_buy_price"`
+	AverageSellPrice decimal.Decimal `json:"average_sell_price"`
 
-	BaseBought decimal.Decimal
-	BaseSold decimal.Decimal
-	CounterBought decimal.Decimal
-	CounterSold decimal.Decimal
+	BaseBought decimal.Decimal `json:"base_bought"`
+	BaseSold decimal.Decimal `json:"base_sold"`
+	BaseFees decimal.Decimal `json:"base_fees"`
+	CounterBought decimal.Decimal `json:"counter_bought"`
+	CounterSold decimal.Decimal `json:"counter_sold"`
+	CounterFees decimal.Decimal `json:"counter_fees"`
 
-	BaseBalance decimal.Decimal
-	CounterBalance decimal.Decimal
+	BaseBalance decimal.Decimal `json:"base_balance"`
+	CounterBalance decimal.Decimal `json:"counter_balance"`
 
-	TotalVolume decimal.Decimal
-	OrderCount int64
+	TotalVolume decimal.Decimal `json:"total_volume"`
+	OrderCount int64 `json:"order_count"`
 
 }
 
@@ -68,8 +72,13 @@ func Add(r Report, orders ...CompletedOrder) Report {
 		}
 
 		volumeForRealisedGain := decimal.Min(r.BaseBought, r.BaseSold)
-		r.RealisedGain = r.AverageSellPrice.Sub(r.AverageBuyPrice).Mul(volumeForRealisedGain)
 
+		r.CounterFees = r.CounterFees.Add(o.CounterFee)
+		r.CounterBalance = r.CounterBalance.Sub(o.CounterFee)
+
+		r.RealisedGain = r.AverageSellPrice.Sub(r.AverageBuyPrice).Mul(volumeForRealisedGain).Sub(r.CounterFees)
+
+		r.BaseFees = r.BaseFees.Add(o.BaseFee)
 		r.TotalVolume = r.TotalVolume.Add(o.Volume)
 		r.OrderCount++
 	}
