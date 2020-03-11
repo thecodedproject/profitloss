@@ -43,8 +43,8 @@ func (r Report) RealisedGain() decimal.Decimal {
 	return r.AverageSellPrice().Sub(r.AverageBuyPrice()).Mul(volumeForRealisedGain).Sub(r.CounterFees)
 }
 
-func (r Report) UnrealisedGain() decimal.Decimal {
-	return decimal.Decimal{}
+func (r Report) UnrealisedGain(marketPrice decimal.Decimal) decimal.Decimal {
+	return marketPrice.Sub(r.AverageBuyPrice()).Div(r.BaseBalance())
 }
 
 func (r Report) AverageBuyPrice() decimal.Decimal {
