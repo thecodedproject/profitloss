@@ -29,25 +29,38 @@ type CompletedOrder struct {
 
 type Report struct {
 	Type CalcType `json:"type"`
-
-	RealisedGain decimal.Decimal `json:"realised_gain"`
-
-	AverageBuyPrice decimal.Decimal `json:"average_buy_price"`
-	AverageSellPrice decimal.Decimal `json:"average_sell_price"`
-
 	BaseBought decimal.Decimal `json:"base_bought"`
 	BaseSold decimal.Decimal `json:"base_sold"`
 	BaseFees decimal.Decimal `json:"base_fees"`
 	CounterBought decimal.Decimal `json:"counter_bought"`
 	CounterSold decimal.Decimal `json:"counter_sold"`
 	CounterFees decimal.Decimal `json:"counter_fees"`
-
-	BaseBalance decimal.Decimal `json:"base_balance"`
-	CounterBalance decimal.Decimal `json:"counter_balance"`
-
-	TotalVolume decimal.Decimal `json:"total_volume"`
 	OrderCount int64 `json:"order_count"`
+}
 
+func (r Report) RealisedGain() decimal.Decimal {
+	volumeForRealisedGain := decimal.Min(r.BaseBought, r.BaseSold)
+	return r.AverageSellPrice().Sub(r.AverageBuyPrice()).Mul(volumeForRealisedGain).Sub(r.CounterFees)
+}
+
+func (r Report) AverageBuyPrice() decimal.Decimal {
+	return r.CounterSold.Div(r.BaseBought)
+}
+
+func (r Report) AverageSellPrice() decimal.Decimal {
+	return r.CounterBought.Div(r.BaseSold)
+}
+
+func (r Report) BaseBalance() decimal.Decimal {
+	return r.BaseBought.Sub(r.BaseSold).Sub(r.BaseFees)
+}
+
+func (r Report) CounterBalance() decimal.Decimal {
+	return r.CounterBought.Sub(r.CounterSold).Sub(r.CounterFees)
+}
+
+func (r Report) TotalVolume() decimal.Decimal {
+	return r.BaseSold.Add(r.BaseBought)
 }
 
 func Add(r Report, orders ...CompletedOrder) Report {
@@ -58,28 +71,13 @@ func Add(r Report, orders ...CompletedOrder) Report {
 		if o.Type == OrderTypeBid {
 			r.BaseBought = r.BaseBought.Add(o.Volume)
 			r.CounterSold = r.CounterSold.Add(orderCost)
-			r.AverageBuyPrice = r.CounterSold.Div(r.BaseBought)
-
-			r.BaseBalance = r.BaseBalance.Add(o.Volume)
-			r.CounterBalance = r.CounterBalance.Sub(orderCost)
 		}	else {
 			r.CounterBought = r.CounterBought.Add(orderCost)
 			r.BaseSold = r.BaseSold.Add(o.Volume)
-			r.AverageSellPrice = r.CounterBought.Div(r.BaseSold)
-
-			r.BaseBalance = r.BaseBalance.Sub(o.Volume)
-			r.CounterBalance = r.CounterBalance.Add(orderCost)
 		}
 
-		volumeForRealisedGain := decimal.Min(r.BaseBought, r.BaseSold)
-
 		r.CounterFees = r.CounterFees.Add(o.CounterFee)
-		r.CounterBalance = r.CounterBalance.Sub(o.CounterFee)
-
-		r.RealisedGain = r.AverageSellPrice.Sub(r.AverageBuyPrice).Mul(volumeForRealisedGain).Sub(r.CounterFees)
-
 		r.BaseFees = r.BaseFees.Add(o.BaseFee)
-		r.TotalVolume = r.TotalVolume.Add(o.Volume)
 		r.OrderCount++
 	}
 

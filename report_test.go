@@ -25,22 +25,12 @@ func assertDecimalsEqual(t *testing.T, expected, actual decimal.Decimal, i ...in
 
 func assertReportsEqual(t *testing.T, e, a profitloss.Report) {
 
-	assertDecimalsEqual(t, e.RealisedGain, a.RealisedGain, "RealisedGain")
-
-	assertDecimalsEqual(t, e.AverageBuyPrice, a.AverageBuyPrice, "AverageBuyPrice")
-	assertDecimalsEqual(t, e.AverageSellPrice, a.AverageSellPrice, "AverageSellPrice")
-
 	assertDecimalsEqual(t, e.BaseBought, a.BaseBought, "BaseBought")
 	assertDecimalsEqual(t, e.BaseSold, a.BaseSold, "BaseSold")
 	assertDecimalsEqual(t, e.BaseFees, a.BaseFees, "BaseFees")
 	assertDecimalsEqual(t, e.CounterBought, a.CounterBought, "CounterBought")
 	assertDecimalsEqual(t, e.CounterSold, a.CounterSold, "CounterSold")
 	assertDecimalsEqual(t, e.CounterFees, a.CounterFees, "CounterFees")
-
-	assertDecimalsEqual(t, e.BaseBalance, a.BaseBalance, "BaseBalance")
-	assertDecimalsEqual(t, e.CounterBalance, a.CounterBalance, "CounterBalance")
-
-	assertDecimalsEqual(t, e.TotalVolume, a.TotalVolume, "TotalVolume")
 	assert.Equal(t, e.OrderCount, a.OrderCount)
 }
 
@@ -48,7 +38,147 @@ func D(f float64) decimal.Decimal {
 	return decimal.NewFromFloat(f)
 }
 
-func TestAveragePriceReport(t *testing.T) {
+func TestAveragePriceReport_AverageBuyPrice(t *testing.T) {
+	r := profitloss.Report{
+		BaseBought: D(22.5),
+		CounterSold: D(3375.0),
+	}
+
+	assertDecimalsEqual(t, D(150.0), r.AverageBuyPrice())
+}
+
+func TestAveragePriceReport_AverageSellPrice(t *testing.T) {
+	r := profitloss.Report{
+		BaseSold: D(16.0),
+		CounterBought: D(2620.0),
+	}
+
+	assertDecimalsEqual(t, D(163.75), r.AverageSellPrice())
+}
+
+func TestAveragePriceReport_RealisedGain(t *testing.T) {
+
+	testCases := []struct{
+		Name string
+		Report profitloss.Report
+		RealisedGain decimal.Decimal
+	}{
+		{
+			Name: "No fees and bought more than sold uses sold volume",
+			Report: profitloss.Report{
+				BaseBought: D(22.5),
+				CounterSold: D(3375.0),
+				BaseSold: D(16.0),
+				CounterBought: D(2620.0),
+			},
+			RealisedGain: D(220.0),
+		},
+		{
+			Name: "No fees and sold more than bought uses bought volume",
+			Report: profitloss.Report{
+				BaseBought: D(16.0),
+				CounterSold: D(2620.0),
+				BaseSold: D(22.5),
+				CounterBought: D(3375.0),
+			},
+			RealisedGain: D(-220.0),
+		},
+		{
+			Name: "Counter fees are removed from realised gain",
+			Report: profitloss.Report{
+				BaseBought: D(16.0),
+				CounterSold: D(2620.0),
+				BaseSold: D(22.5),
+				CounterBought: D(3375.0),
+				CounterFees: D(25.5),
+			},
+			RealisedGain: D(-245.5),
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.Name, func(t *testing.T) {
+			assertDecimalsEqual(t, test.RealisedGain, test.Report.RealisedGain())
+		})
+	}
+}
+
+func TestAveragePriceReport_BaseBalance(t *testing.T) {
+
+	testCases := []struct{
+		Name string
+		Report profitloss.Report
+		BaseBalance decimal.Decimal
+	}{
+		{
+			Name: "No fees",
+			Report: profitloss.Report{
+				BaseBought: D(22.5),
+				BaseSold: D(16.0),
+			},
+			BaseBalance: D(6.5),
+		},
+		{
+			Name: "Base fees are subtracted from balance",
+			Report: profitloss.Report{
+				BaseBought: D(22.5),
+				BaseSold: D(16.0),
+				BaseFees: D(7.6),
+			},
+			BaseBalance: D(-1.1),
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.Name, func(t *testing.T) {
+			assertDecimalsEqual(t, test.BaseBalance, test.Report.BaseBalance())
+		})
+	}
+}
+
+func TestAveragePriceReport_CounterBalance(t *testing.T) {
+
+	testCases := []struct{
+		Name string
+		Report profitloss.Report
+		CounterBalance decimal.Decimal
+	}{
+		{
+			Name: "No fees",
+			Report: profitloss.Report{
+				CounterBought: D(22.5),
+				CounterSold: D(16.0),
+			},
+			CounterBalance: D(6.5),
+		},
+		{
+			Name: "Counter fees are subtracted from balance",
+			Report: profitloss.Report{
+				CounterBought: D(22.5),
+				CounterSold: D(16.0),
+				CounterFees: D(7.6),
+			},
+			CounterBalance: D(-1.1),
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.Name, func(t *testing.T) {
+			assertDecimalsEqual(t, test.CounterBalance, test.Report.CounterBalance())
+		})
+	}
+}
+
+func TestAveragePriceReport_TotalVolume(t *testing.T) {
+	r := profitloss.Report{
+		BaseBought: D(36.2),
+		BaseSold: D(16.5),
+	}
+
+	assertDecimalsEqual(t, D(52.7), r.TotalVolume())
+}
+
+func TestAddOrdersToAveragePriceReport(t *testing.T) {
 
 	testCases := []struct {
 		Name string
@@ -84,16 +214,10 @@ func TestAveragePriceReport(t *testing.T) {
 				},
 			},
 			Expected: profitloss.Report{
-				RealisedGain: D(220.0),
-				AverageBuyPrice: D(150.0),
-				AverageSellPrice: D(163.75),
 				BaseBought: D(22.5),
 				BaseSold: D(16.0),
 				CounterBought: D(2620.0),
 				CounterSold: D(3375.0),
-				BaseBalance: D(6.5),
-				CounterBalance: D(-755.0),
-				TotalVolume: D(38.5),
 				OrderCount: 4,
 			},
 		},
@@ -122,16 +246,10 @@ func TestAveragePriceReport(t *testing.T) {
 				},
 			},
 			Expected: profitloss.Report{
-				RealisedGain: D(337.5),
-				AverageBuyPrice: D(170.0),
-				AverageSellPrice: D(181.25),
 				BaseBought: D(30.0),
 				BaseSold: D(40.0),
 				CounterBought: D(7250.0),
 				CounterSold: D(5100.0),
-				BaseBalance: D(-10.0),
-				CounterBalance: D(2150.0),
-				TotalVolume: D(70.0),
 				OrderCount: 4,
 			},
 		},
@@ -164,17 +282,11 @@ func TestAveragePriceReport(t *testing.T) {
 				},
 			},
 			Expected: profitloss.Report{
-				RealisedGain: D(-645),
-				AverageBuyPrice: D(175.0),
-				AverageSellPrice: D(132.0),
 				BaseBought: D(20.0),
 				BaseSold: D(15.0),
 				BaseFees: D(11.0),
 				CounterBought: D(1980.0),
 				CounterSold: D(3500.0),
-				BaseBalance: D(5.0),
-				CounterBalance: D(-1520.0),
-				TotalVolume: D(35.0),
 				OrderCount: 4,
 			},
 		},
@@ -207,17 +319,11 @@ func TestAveragePriceReport(t *testing.T) {
 				},
 			},
 			Expected: profitloss.Report{
-				RealisedGain: D(-452.3),
-				AverageBuyPrice: D(170.13),
-				AverageSellPrice: D(126.0),
 				BaseBought: D(10.0),
 				BaseSold: D(10.0),
 				CounterBought: D(1260.0),
 				CounterSold: D(1701.3),
 				CounterFees: D(11.0),
-				BaseBalance: D(0.0),
-				CounterBalance: D(-452.3),
-				TotalVolume: D(20.0),
 				OrderCount: 4,
 			},
 		},
