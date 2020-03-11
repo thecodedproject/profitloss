@@ -103,6 +103,33 @@ func TestAveragePriceReport_RealisedGain(t *testing.T) {
 	}
 }
 
+func TestAveragePriceReport_UnrealisedGain(t *testing.T) {
+
+	testCases := []struct{
+		Name string
+		Report profitloss.Report
+		MarketPrice decimal.Decimal
+		UnrealisedGain decimal.Decimal
+	}{
+		{
+			Name: "No fees",
+			Report: profitloss.Report{
+				BaseBought: D(22.5),
+				BaseSold: D(16.0),
+				CounterSold: D(2620.0),
+			},
+			MarketPrice: D(12.5),
+			UnrealisedGain: D(220.0),
+		},
+	}
+
+	for _, test := range testCases {
+		t.Run(test.Name, func(t *testing.T) {
+			assertDecimalsEqual(t, test.UnrealisedGain, test.Report.UnrealisedGain())
+		})
+	}
+}
+
 func TestAveragePriceReport_BaseBalance(t *testing.T) {
 
 	testCases := []struct{
